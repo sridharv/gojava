@@ -83,9 +83,8 @@ public class MoreAsserts {
                 failed = true;
             }
         }
-        if (failed) {
-            System.exit(1);
-        }
+        // NOTE: We need to call System.exit to force all go threads to exit.
+        System.exit(failed ? 1 : 0);
     }
 }
 
