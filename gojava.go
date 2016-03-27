@@ -51,9 +51,6 @@ func initBuild() (string, func (), error) {
 }
 
 func loadExportData(pkgs []string) ([]*types.Package, error) {
-	if len(pkgs) == 0 {
-		pkgs = []string{"."}
-	}
 	// Load export data for the packages
 	if err := runCommand("go", append([]string{"install"}, pkgs...)...); err != nil {
 		return nil, err
@@ -313,7 +310,6 @@ Usage:
 	gojava build [-o <jar>] [<pkg1>, [<pkg2>...]]
 
 This generates a jar containing Java bindings to the specified Go packages.
-If no packages are specified the current directory is bound.
 `
 
 func main() {
@@ -323,7 +319,11 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	if err := bindToJar(*o, flag.Args()...); err != nil {
+	if len(flag.Args()) < 2 || flag.Args()[0] != "build" {
+		flag.Usage()
+		os.Exit(1)
+	}
+	if err := bindToJar(*o, flag.Args()[1:]...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
