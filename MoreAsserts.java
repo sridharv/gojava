@@ -4,6 +4,7 @@ import go.LoadJNI;
 import java.util.Arrays;
 import java.lang.Math;
 import java.lang.reflect.Method;
+import java.util.regex.Pattern;
 
 import go.SeqTest;
 
@@ -41,7 +42,7 @@ public class MoreAsserts {
     }
 
     public static void assertEquals(String msg, String expected, String actual) {
-        assertTrue(msg, expected == actual);
+        assertTrue(String.format("%s expected:%s != actual:%s", msg, expected, actual), expected.equals(actual));
     }
 
     public static void assertEquals(String msg, boolean expected, boolean actual) {
@@ -66,8 +67,9 @@ public class MoreAsserts {
     public static void main(String[] args) {
         SeqTest test = new SeqTest();
         Class c = test.getClass();
+        boolean failed = false;
         for (Method method : c.getDeclaredMethods()) {
-            if (!method.getName().startsWith("test")) {
+            if (!method.getName().startsWith("test") || !Pattern.matches(args[0], method.getName())) {
                 continue;
             }
 
@@ -78,7 +80,11 @@ public class MoreAsserts {
             } catch (Exception ex) {
                 System.out.println(" FAIL");
                 ex.printStackTrace();
+                failed = true;
             }
+        }
+        if (failed) {
+            System.exit(1);
         }
     }
 }

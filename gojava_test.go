@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 	"os/exec"
 	"os"
+	"flag"
 )
+
+var javaTest = flag.String("javatest", ".*", "Run only java tests matching the regular expression")
 
 func TestJavaBind(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "gojavatest")
@@ -33,7 +36,7 @@ func TestJavaBind(t *testing.T) {
 	if err := runCommand("javac", "-cp", jar, "-d", tmpDir, toCopy[0].dst, toCopy[1].dst); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("java", "-cp", jar + ":" + tmpDir, "go.MoreAsserts")
+	cmd := exec.Command("java", "-cp", jar + ":" + tmpDir, "go.MoreAsserts", *javaTest)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
