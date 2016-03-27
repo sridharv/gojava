@@ -1,4 +1,4 @@
-package gojava
+package main
 
 import (
 	"testing"
@@ -18,7 +18,7 @@ func TestJavaBind(t *testing.T) {
 		t.Fatal(err)
 	}
 	jar := filepath.Join(tmpDir, "gojavatest.jar")
-	if err := createJar(jar,
+	if err := bindToJar(jar,
 		"github.com/sridharv/gomobile-java/bind/testpkg",
 		"github.com/sridharv/gomobile-java/bind/testpkg/secondpkg",
 		"github.com/sridharv/gomobile-java/bind/testpkg/simplepkg",

@@ -1,4 +1,4 @@
-package gojava
+package main
 
 import (
 	"go/build"
@@ -19,85 +19,99 @@ import (
 	"runtime"
 
 	"github.com/sridharv/gomobile-java/bind"
+	"flag"
 )
 
-func runCommandWithEnv(env []string, cmd string, args ...string) error {
-	c := exec.Command(cmd, args...)
-	c.Env = append(os.Environ(), env...)
-	out, err := c.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s %s %s: %v: %s", strings.Join(env, " "), cmd, strings.Join(args, " "), err, string(out))
+func runCommand(cmd string, args ...string) error {
+	if out, err := exec.Command(cmd, args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("%s %s: %v: %s", cmd, strings.Join(args, " "), err, string(out))
 	}
 	return nil
 }
 
-func runCommand(cmd string, args ...string) error {
-	return runCommandWithEnv([]string{}, cmd, args...)
-}
+var javaHome = os.Getenv("JAVA_HOME")
+var cwd string
 
-func createJar(target string, pkgs ...string) error {
-	javaHome := os.Getenv("JAVA_HOME")
+func initBuild() (string, func (), error) {
 	if javaHome == "" {
-		return fmt.Errorf("$JAVA_HOME not set")
+		return "", nil, fmt.Errorf("$JAVA_HOME not set")
+	}
+	var err error
+	if cwd, err = os.Getwd(); err != nil {
+		return "", nil, err
 	}
 	tmpDir, err := ioutil.TempDir("", "gojava")
 	if err != nil {
-		return err
+		return "", nil, err
 	}
-	defer os.RemoveAll(tmpDir)
+	return tmpDir, func () {
+		os.RemoveAll(tmpDir)
+		os.Chdir(cwd)
+	}, nil
+}
 
+func loadExportData(pkgs []string) ([]*types.Package, error) {
+	if len(pkgs) == 0 {
+		pkgs = []string{"."}
+	}
 	// Load export data for the packages
 	if err := runCommand("go", append([]string{"install"}, pkgs...)...); err != nil {
-		return err
+		return nil, err
 	}
 	typePkgs := make([]*types.Package, len(pkgs))
 
 	for i, p := range pkgs {
-		var err error
-		if typePkgs[i], err = importer.Default().Import(p); err != nil {
-			return err
+		buildPkg, err := build.Import(p, cwd, build.AllowBinary)
+		if err != nil {
+			return nil, err
+		}
+		if typePkgs[i], err = importer.Default().Import(buildPkg.ImportPath); err != nil {
+			return nil, err
 		}
 	}
+	return typePkgs, nil
+}
 
-	bindDir := filepath.Join(tmpDir, "gojava_bind")
-	mainDir := filepath.Join(bindDir, "main")
-	mainFile := filepath.Join(mainDir, "main.go")
-	javaDir := filepath.Join(tmpDir, "src/go")
-	classDir := filepath.Join(tmpDir, "classes/go")
-	for _, d := range []string{classDir, javaDir, mainDir} {
+func createDirs(dirs ...string) error {
+	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0700); err != nil {
 			return err
 		}
 	}
-	javacArgs := []string{"-d", filepath.Join(tmpDir, "classes"), "-sourcepath", filepath.Join(tmpDir, "src")}
+	return nil
+}
 
-	fs := token.NewFileSet()
-	for _, p := range typePkgs {
-		goFile := filepath.Join(bindDir, "go_"+p.Name()+"main.go")
-		f, err := os.OpenFile(goFile, os.O_CREATE|os.O_RDWR, 0600)
+func bindPackages(bindDir, javaDir string, pkgs []*types.Package) ([]string, error) {
+	fs, javaFiles := token.NewFileSet(), make([]string, 0)
+	for _, p := range pkgs {
+		goFile := filepath.Join(bindDir, "go_" + p.Name() + "main.go")
+		f, err := os.OpenFile(goFile, os.O_CREATE | os.O_RDWR, 0600)
 		if err != nil {
-			return fmt.Errorf("failed to open: %s: %v", goFile, err)
+			return nil, fmt.Errorf("failed to open: %s: %v", goFile, err)
 		}
-		conf := &bind.GeneratorConfig{Writer: f, Fset: fs, Pkg: p, AllPkg: typePkgs}
+		conf := &bind.GeneratorConfig{Writer: f, Fset: fs, Pkg: p, AllPkg: pkgs}
 		if err := bind.GenGo(conf); err != nil {
-			return fmt.Errorf("failed to bind %s:%v", p.Name(), err)
+			return nil, fmt.Errorf("failed to bind %s:%v", p.Name(), err)
 		}
 		if err := f.Close(); err != nil {
-			return err
+			return nil, err
 		}
 		javaFile := strings.Title(p.Name()) + ".java"
 		if err := bindJava(javaDir, javaFile, conf, int(bind.Java)); err != nil {
-			return err
+			return nil, err
 		}
-		if err := bindJava(bindDir, "java_"+p.Name()+".c", conf, int(bind.JavaC)); err != nil {
-			return err
+		if err := bindJava(bindDir, "java_" + p.Name() + ".c", conf, int(bind.JavaC)); err != nil {
+			return nil, err
 		}
-		if err := bindJava(bindDir, p.Name()+".h", conf, int(bind.JavaH)); err != nil {
-			return err
+		if err := bindJava(bindDir, p.Name() + ".h", conf, int(bind.JavaH)); err != nil {
+			return nil, err
 		}
-		javacArgs = append(javacArgs, filepath.Join(javaDir, javaFile))
+		javaFiles = append(javaFiles, filepath.Join(javaDir, javaFile))
 	}
+	return javaFiles, nil
+}
 
+func createSupportFiles(bindDir, javaDir, mainFile string) error {
 	bindPkg, err := build.Import(reflect.TypeOf(bind.ErrorList{}).PkgPath(), "", build.FindOnly)
 	if err != nil {
 		return err
@@ -122,28 +136,37 @@ func createJar(target string, pkgs ...string) error {
 	if err := ioutil.WriteFile(flagFile, []byte(fmt.Sprintf(javaInclude, inc1, inc2)), 0600); err != nil {
 		return err
 	}
+	return nil
+}
+
+func buildGo(classDir, mainDir string) error {
 	dylib := filepath.Join(classDir, "libgojava")
-	back, err := cdTo(mainDir)
-	if err != nil {
+	if err := os.Chdir(mainDir); err != nil {
 		return err
 	}
-	defer back()
-	if err := runCommand("go", "build", "-o", dylib, "-buildmode=c-shared", "."); err != nil {
-		return err
-	}
+	return runCommand("go", "build", "-o", dylib, "-buildmode=c-shared", ".")
+}
+
+func buildJava(jarDir, javaDir string, javaFiles []string) error {
 	if err := os.Chdir(javaDir); err != nil {
 		return err
 	}
-	javacArgs = append(javacArgs, filepath.Join(javaDir, "Seq.java"), filepath.Join(javaDir, "LoadJNI.java"))
-	if err := runCommand("javac", javacArgs...); err != nil {
+	javaFiles = append(javaFiles, filepath.Join(javaDir, "Seq.java"), filepath.Join(javaDir, "LoadJNI.java"))
+	return runCommand("javac", append([]string{
+		"-d", jarDir,
+		"-sourcepath", filepath.Join(javaDir, ".."),
+	}, javaFiles...)...)
+}
+
+func createJar(target, jarDir string) error {
+	if err := os.Chdir(cwd); err != nil {
 		return err
 	}
-	t, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0600)
+	t, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
 	w := zip.NewWriter(t)
-	jarDir := filepath.Join(tmpDir, "classes")
 	if err := filepath.Walk(jarDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -176,22 +199,48 @@ func createJar(target string, pkgs ...string) error {
 	if err := t.Close(); err != nil {
 		return err
 	}
+	fmt.Println("created", target)
 	return nil
 }
 
-func cdTo(target string) (func(), error) {
-	cur, err := os.Getwd()
+func bindToJar(target string, pkgs ...string) error {
+	tmpDir, cleanup, err := initBuild()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err := os.Chdir(target); err != nil {
-		return nil, err
+	defer cleanup()
+
+	typePkgs, err := loadExportData(pkgs)
+	if err != nil {
+		return err
 	}
-	return func() {
-		if err := os.Chdir(cur); err != nil {
-			panic(err)
-		}
-	}, nil
+
+	bindDir := filepath.Join(tmpDir, "gojava_bind")
+	mainDir := filepath.Join(bindDir, "main")
+	mainFile := filepath.Join(mainDir, "main.go")
+	javaDir := filepath.Join(tmpDir, "src/go")
+	jarDir := filepath.Join(tmpDir, "classes")
+	classDir := filepath.Join(tmpDir, "classes/go")
+
+	if err := createDirs(classDir, javaDir, mainDir); err != nil {
+		return err
+	}
+
+	javaFiles, err := bindPackages(bindDir, javaDir, typePkgs)
+	if err != nil {
+		return err
+	}
+	if err := createSupportFiles(bindDir, javaDir, mainFile); err != nil {
+		return err
+	}
+
+	if err := buildGo(classDir, mainDir); err != nil {
+		return err
+	}
+	if err := buildJava(jarDir, javaDir, javaFiles); err != nil {
+		return err
+	}
+	return createJar(target, jarDir)
 }
 
 func copyFile(dst, src string) error {
@@ -256,3 +305,26 @@ import (
 
 func main() {}
 `
+
+const usage = `gojava is a tool for creating Java bindings to Go
+
+Usage:
+
+	gojava build [-o <jar>] [<pkg1>, [<pkg2>...]]
+
+This generates a jar containing Java bindings to the specified Go packages.
+If no packages are specified the current directory is bound.
+`
+
+func main() {
+	o := flag.String("o", "libgojava.jar", "Path to the generated jar file")
+	flag.Usage = func () {
+		fmt.Fprintln(os.Stderr, usage)
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+	if err := bindToJar(*o, flag.Args()...); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
