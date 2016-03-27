@@ -14,7 +14,7 @@ func TestJavaBind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	jar := filepath.Join("/tmp", "gojavatest.jar")
+	jar := filepath.Join(tmpDir, "gojavatest.jar")
 	if err := createJar(jar,
 		"github.com/sridharv/gomobile-java/bind/testpkg",
 		"github.com/sridharv/gomobile-java/bind/testpkg/secondpkg",
