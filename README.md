@@ -18,4 +18,4 @@ You can include the generated jar in your build using the build tool of your cho
 The jar contains a native library (built for the build platform) which is loaded automatically.
 Cross platform builds are not currently supported.
 
-NOTE: This has only been tested on an OSX developer machine and not in production.
+NOTE: This has only been tested on an OSX developer machine and Linux (on Travis) and not in production.
