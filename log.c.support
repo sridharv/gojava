@@ -1,0 +1,15 @@
+#include <stdio.h>
+#include <stdarg.h>
+#include <android/log.h>
+
+void __android_log_print(int priority, const char* ignore, const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  if (priority == ANDROID_LOG_INFO) {
+    vfprintf(stdout, fmt, args);
+  } else {
+    vfprintf(stderr, fmt, args);
+  }
+  va_end(args);
+}
+

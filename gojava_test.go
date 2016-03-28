@@ -19,9 +19,9 @@ func TestJavaBind(t *testing.T) {
 	}
 	jar := filepath.Join(tmpDir, "gojavatest.jar")
 	if err := bindToJar(jar,
-		"github.com/sridharv/gomobile-java/bind/testpkg",
-		"github.com/sridharv/gomobile-java/bind/testpkg/secondpkg",
-		"github.com/sridharv/gomobile-java/bind/testpkg/simplepkg",
+		"golang.org/x/mobile/bind/testpkg",
+		"golang.org/x/mobile/bind/testpkg/secondpkg",
+		"golang.org/x/mobile/bind/testpkg/simplepkg",
 	); err != nil {
 		t.Fatal(err)
 	}

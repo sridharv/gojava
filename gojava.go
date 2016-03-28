@@ -19,7 +19,8 @@ import (
 	"runtime"
 
 	"flag"
-	"github.com/sridharv/gomobile-java/bind"
+
+	"golang.org/x/mobile/bind"
 )
 
 func runCommand(cmd string, args ...string) error {
@@ -108,29 +109,44 @@ func bindPackages(bindDir, javaDir string, pkgs []*types.Package) ([]string, err
 	return javaFiles, nil
 }
 
-func createSupportFiles(bindDir, javaDir, mainFile string) error {
+func createSupportFiles(fakeAndroidDir, bindDir, javaDir, mainFile string) error {
 	bindPkg, err := build.Import(reflect.TypeOf(bind.ErrorList{}).PkgPath(), "", build.FindOnly)
+	if err != nil {
+		return err
+	}
+	localPkg, err := build.Import(reflect.TypeOf(filePair{}).PkgPath(), "", build.FindOnly)
 	if err != nil {
 		return err
 	}
 	bindJavaPkgDir := filepath.Join(bindPkg.Dir, "java")
 	toCopy := []filePair{
 		{filepath.Join(bindDir, "seq.go"), filepath.Join(bindPkg.Dir, "seq.go.support")},
-		{filepath.Join(bindDir, "seq_java.go"), filepath.Join(bindJavaPkgDir, "seq_android.go.support")},
 		{filepath.Join(bindDir, "seq.c"), filepath.Join(bindJavaPkgDir, "seq_android.c.support")},
 		{filepath.Join(bindDir, "seq.h"), filepath.Join(bindJavaPkgDir, "seq.h")},
 		{filepath.Join(javaDir, "Seq.java"), filepath.Join(bindJavaPkgDir, "Seq.java")},
-		{filepath.Join(javaDir, "LoadJNI.java"), filepath.Join(bindPkg.Dir, "..", "..", "gojava", "LoadJNI.java")},
+		{filepath.Join(javaDir, "LoadJNI.java"), filepath.Join(localPkg.Dir, "LoadJNI.java")},
+		{filepath.Join(fakeAndroidDir, "log.h"), filepath.Join(localPkg.Dir, "log.h.support")},
+		{filepath.Join(bindDir, "log.c"), filepath.Join(localPkg.Dir, "log.c.support")},
 	}
 	if err := copyFiles(toCopy); err != nil {
 		return err
 	}
+
+	err = copyFile(
+		filepath.Join(bindDir, "seq_java.go"),
+		filepath.Join(bindJavaPkgDir, "seq_android.go.support"),
+		func(str string) bool { return !strings.Contains(str, "#cgo LDFLAGS: -llog") })
+	if err != nil {
+		return err
+	}
+
 	if err := ioutil.WriteFile(mainFile, []byte(fmt.Sprintf(javaMain, bindPkg.ImportPath)), 0600); err != nil {
 		return err
 	}
 	inc1, inc2 := filepath.Join(javaHome, "include"), filepath.Join(javaHome, "include", runtime.GOOS)
+	inc3 := filepath.Dir(fakeAndroidDir)
 	flagFile := filepath.Join(bindDir, "gojavacimport.go")
-	if err := ioutil.WriteFile(flagFile, []byte(fmt.Sprintf(javaInclude, inc1, inc2)), 0600); err != nil {
+	if err := ioutil.WriteFile(flagFile, []byte(fmt.Sprintf(javaInclude, inc1, inc2, inc3)), 0600); err != nil {
 		return err
 	}
 	return nil
@@ -213,13 +229,14 @@ func bindToJar(target string, pkgs ...string) error {
 	}
 
 	bindDir := filepath.Join(tmpDir, "gojava_bind")
+	fakeAndroidDir := filepath.Join(tmpDir, "includes", "android")
 	mainDir := filepath.Join(bindDir, "main")
 	mainFile := filepath.Join(mainDir, "main.go")
 	javaDir := filepath.Join(tmpDir, "src/go")
 	jarDir := filepath.Join(tmpDir, "classes")
 	classDir := filepath.Join(tmpDir, "classes/go")
 
-	if err := createDirs(classDir, javaDir, mainDir); err != nil {
+	if err := createDirs(classDir, javaDir, mainDir, fakeAndroidDir); err != nil {
 		return err
 	}
 
@@ -227,7 +244,7 @@ func bindToJar(target string, pkgs ...string) error {
 	if err != nil {
 		return err
 	}
-	if err := createSupportFiles(bindDir, javaDir, mainFile); err != nil {
+	if err := createSupportFiles(fakeAndroidDir, bindDir, javaDir, mainFile); err != nil {
 		return err
 	}
 
@@ -240,12 +257,22 @@ func bindToJar(target string, pkgs ...string) error {
 	return createJar(target, jarDir)
 }
 
-func copyFile(dst, src string) error {
+func copyFile(dst, src string, allow func (string) bool) error {
 	d, err := ioutil.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(dst, d, 0600)
+	if allow == nil {
+		return ioutil.WriteFile(dst, d, 0600)
+	}
+	lines := strings.Split(string(d), "\n")
+	filtered := make([]string, 0)
+	for _, l := range lines {
+		if allow(l) {
+			filtered = append(filtered, l)
+		}
+	}
+	return ioutil.WriteFile(dst, []byte(strings.Join(filtered, "\n")), 0600)
 }
 
 type filePair struct {
@@ -255,7 +282,7 @@ type filePair struct {
 
 func copyFiles(files []filePair) error {
 	for _, p := range files {
-		if err := copyFile(p.dst, p.src); err != nil {
+		if err := copyFile(p.dst, p.src, nil); err != nil {
 			return err
 		}
 	}
@@ -287,9 +314,9 @@ func bindJava(dir, file string, conf *bind.GeneratorConfig, ft int) error {
 	return w.Close()
 }
 
-const javaInclude = `package gojava_bind
+const javaInclude = `package gomobile_bind
 
-// #cgo CFLAGS: -Wall -I%s -I%s
+// #cgo CFLAGS: -Wall -I%s -I%s -I%s
 import "C"
 
 `

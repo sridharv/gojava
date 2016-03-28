@@ -1,0 +1,11 @@
+#ifndef __FAKE_ANDROID_LOG_H
+#define __FAKE_ANDROID_LOG_H
+
+#include <stdio.h>
+
+#define ANDROID_LOG_INFO 0
+#define ANDROID_LOG_FATAL 1
+
+void __android_log_print(int priority, const char* ignore, const char *fmt, ...);
+
+#endif // __FAKE_ANDROID_LOG_H
