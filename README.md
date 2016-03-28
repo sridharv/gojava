@@ -1,4 +1,4 @@
-## GoJava - Java bindings to Go packages
+## GoJava - Java bindings to Go packages [![Build Status](https://travis-ci.org/sridharv/gojava.svg?branch=master)](https://travis-ci.org/sridharv/gojava)
 
 GoJava uses a [forked version of gomobile](https://github.com/sridharv/gomobile-java) to generate Java bindings to Go packages.
 The same set of types are supported. Details on how the binding works can be found [here](https://godoc.org/golang.org/x/mobile/cmd/gobind).
