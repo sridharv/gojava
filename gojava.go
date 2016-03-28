@@ -18,8 +18,8 @@ import (
 	"archive/zip"
 	"runtime"
 
-	"github.com/sridharv/gomobile-java/bind"
 	"flag"
+	"github.com/sridharv/gomobile-java/bind"
 )
 
 func runCommand(cmd string, args ...string) error {
@@ -32,7 +32,7 @@ func runCommand(cmd string, args ...string) error {
 var javaHome = os.Getenv("JAVA_HOME")
 var cwd string
 
-func initBuild() (string, func (), error) {
+func initBuild() (string, func(), error) {
 	if javaHome == "" {
 		return "", nil, fmt.Errorf("$JAVA_HOME not set")
 	}
@@ -44,7 +44,7 @@ func initBuild() (string, func (), error) {
 	if err != nil {
 		return "", nil, err
 	}
-	return tmpDir, func () {
+	return tmpDir, func() {
 		os.RemoveAll(tmpDir)
 		os.Chdir(cwd)
 	}, nil
@@ -81,8 +81,8 @@ func createDirs(dirs ...string) error {
 func bindPackages(bindDir, javaDir string, pkgs []*types.Package) ([]string, error) {
 	fs, javaFiles := token.NewFileSet(), make([]string, 0)
 	for _, p := range pkgs {
-		goFile := filepath.Join(bindDir, "go_" + p.Name() + "main.go")
-		f, err := os.OpenFile(goFile, os.O_CREATE | os.O_RDWR, 0600)
+		goFile := filepath.Join(bindDir, "go_"+p.Name()+"main.go")
+		f, err := os.OpenFile(goFile, os.O_CREATE|os.O_RDWR, 0600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open: %s: %v", goFile, err)
 		}
@@ -97,10 +97,10 @@ func bindPackages(bindDir, javaDir string, pkgs []*types.Package) ([]string, err
 		if err := bindJava(javaDir, javaFile, conf, int(bind.Java)); err != nil {
 			return nil, err
 		}
-		if err := bindJava(bindDir, "java_" + p.Name() + ".c", conf, int(bind.JavaC)); err != nil {
+		if err := bindJava(bindDir, "java_"+p.Name()+".c", conf, int(bind.JavaC)); err != nil {
 			return nil, err
 		}
-		if err := bindJava(bindDir, p.Name() + ".h", conf, int(bind.JavaH)); err != nil {
+		if err := bindJava(bindDir, p.Name()+".h", conf, int(bind.JavaH)); err != nil {
 			return nil, err
 		}
 		javaFiles = append(javaFiles, filepath.Join(javaDir, javaFile))
@@ -314,7 +314,7 @@ This generates a jar containing Java bindings to the specified Go packages.
 
 func main() {
 	o := flag.String("o", "libgojava.jar", "Path to the generated jar file")
-	flag.Usage = func () {
+	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, usage)
 		flag.PrintDefaults()
 	}
