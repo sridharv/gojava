@@ -108,6 +108,30 @@ func bindPackages(bindDir, javaDir string, pkgs []*types.Package) ([]string, err
 	return javaFiles, nil
 }
 
+func addExtraFiles(javaDir, scanDir string) error {
+	if scanDir == "" {
+		return nil
+	}
+	var files []filePair
+	filepath.Walk(scanDir+"/", func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		fileName, err := filepath.Rel(scanDir, path)
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(fileName, ".java") {
+			files = append(files, filePair{filepath.Join(javaDir, fileName), path})
+		}
+		return nil
+	})
+	return copyFiles(files)
+}
+
 func createSupportFiles(bindDir, javaDir, mainFile string) error {
 	bindPkg, err := build.Import(reflect.TypeOf(bind.ErrorList{}).PkgPath(), "", build.FindOnly)
 	if err != nil {
@@ -164,6 +188,7 @@ func createJar(target, jarDir string) error {
 		return err
 	}
 	w := zip.NewWriter(t)
+	fmt.Printf("Building %s\n", target)
 	if err := filepath.Walk(jarDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -172,6 +197,7 @@ func createJar(target, jarDir string) error {
 			return nil
 		}
 		fileName, err := filepath.Rel(jarDir, path)
+		fmt.Printf("Adding %s\n", fileName)
 		if err != nil {
 			return err
 		}
@@ -196,11 +222,11 @@ func createJar(target, jarDir string) error {
 	if err := t.Close(); err != nil {
 		return err
 	}
-	fmt.Println("created", target)
+	fmt.Printf("Finished building %s\n", target)
 	return nil
 }
 
-func bindToJar(target string, pkgs ...string) error {
+func bindToJar(target string, scanDir string, pkgs ...string) error {
 	tmpDir, cleanup, err := initBuild()
 	if err != nil {
 		return err
@@ -225,6 +251,9 @@ func bindToJar(target string, pkgs ...string) error {
 
 	javaFiles, err := bindPackages(bindDir, javaDir, typePkgs)
 	if err != nil {
+		return err
+	}
+	if err := addExtraFiles(javaDir, scanDir); err != nil {
 		return err
 	}
 	if err := createSupportFiles(bindDir, javaDir, mainFile); err != nil {
@@ -307,23 +336,24 @@ const usage = `gojava is a tool for creating Java bindings to Go
 
 Usage:
 
-	gojava build [-o <jar>] [<pkg1>, [<pkg2>...]]
+	gojava [-o <jar>] [-s <dir>] build [<pkg1>, [<pkg2>...]]
 
 This generates a jar containing Java bindings to the specified Go packages.
 `
 
 func main() {
 	o := flag.String("o", "libgojava.jar", "Path to the generated jar file")
+	s := flag.String("s", "", "Additional path to scan for Java files")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, usage)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	if len(flag.Args()) < 2 || flag.Args()[0] != "build" {
+	if flag.NArg() < 2 || flag.Args()[0] != "build" {
 		flag.Usage()
 		os.Exit(1)
 	}
-	if err := bindToJar(*o, flag.Args()[1:]...); err != nil {
+	if err := bindToJar(*o, *s, flag.Args()[1:]...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
