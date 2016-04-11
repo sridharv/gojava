@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"go/build"
 )
 
 var javaTest = flag.String("javatest", ".*", "Run only java tests matching the regular expression")
@@ -19,6 +20,7 @@ func TestJavaBind(t *testing.T) {
 	}
 	jar := filepath.Join(tmpDir, "gojavatest.jar")
 	if err := bindToJar(jar,
+		"",
 		"github.com/sridharv/gomobile-java/bind/testpkg",
 		"github.com/sridharv/gomobile-java/bind/testpkg/secondpkg",
 		"github.com/sridharv/gomobile-java/bind/testpkg/simplepkg",
@@ -28,7 +30,7 @@ func TestJavaBind(t *testing.T) {
 
 	toCopy := []filePair{
 		{filepath.Join(tmpDir, "MoreAsserts.java"), "MoreAsserts.java"},
-		{filepath.Join(tmpDir, "SeqTest.java"), "../gomobile-java/bind/java/SeqTest.java"},
+		{filepath.Join(tmpDir, "SeqTest.java"), filepath.Join(build.Default.GOPATH, "src/github.com/sridharv/gomobile-java/bind/java/SeqTest.java")},
 	}
 	if err := copyFiles(toCopy); err != nil {
 		t.Fatal(err)
