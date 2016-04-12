@@ -6,12 +6,16 @@ The same set of types are supported. Details on how the binding works can be fou
 ### Usage
 
 ```
-    gojava build [-o <jar>] [<pkg1>, [<pkg2>...]]
-   
-    This generates a jar containing Java bindings to the specified Go packages.
-   
-    -o string
-         Path to the generated jar file (default "libgojava.jar")
+	gojava [-v] [-o <jar>] [-s <dir>] build [<pkg1>, [<pkg2>...]]
+
+	This generates a jar containing Java bindings to the specified Go packages.
+
+	-o string
+	    Path to write the generated jar file. (default "libgojava.jar")
+	-s string
+	    Additional path to scan for Java files. These files will be compiled and
+	    included in the final jar.
+	-v  Verbose output.
 ```
 
 You can include the generated jar in your build using the build tool of your choice.

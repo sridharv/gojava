@@ -4,23 +4,24 @@ import (
 	"testing"
 
 	"flag"
+	"go/build"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"go/build"
 )
 
 var javaTest = flag.String("javatest", ".*", "Run only java tests matching the regular expression")
 
 func TestJavaBind(t *testing.T) {
+	verbose = testing.Verbose()
 	tmpDir, err := ioutil.TempDir("", "gojavatest")
 	if err != nil {
 		t.Fatal(err)
 	}
 	jar := filepath.Join(tmpDir, "gojavatest.jar")
 	if err := bindToJar(jar,
-		"",
+		"testdata",
 		"github.com/sridharv/gomobile-java/bind/testpkg",
 		"github.com/sridharv/gomobile-java/bind/testpkg/secondpkg",
 		"github.com/sridharv/gomobile-java/bind/testpkg/simplepkg",

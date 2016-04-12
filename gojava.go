@@ -1,3 +1,19 @@
+/*
+Command gojava is a tool for creating Java bindings to Go packages.
+
+Usage
+
+	gojava [-v] [-o <jar>] [-s <dir>] build [<pkg1>, [<pkg2>...]]
+
+	This generates a jar containing Java bindings to the specified Go packages.
+
+	-o string
+	    Path to write the generated jar file. (default "libgojava.jar")
+	-s string
+	    Additional path to scan for Java files. These files will be compiled and
+	    included in the final jar.
+	-v  Verbose output.
+ */
 package main
 
 import (
@@ -19,6 +35,7 @@ import (
 	"runtime"
 
 	"flag"
+
 	"github.com/sridharv/gomobile-java/bind"
 )
 
@@ -31,6 +48,14 @@ func runCommand(cmd string, args ...string) error {
 
 var javaHome = os.Getenv("JAVA_HOME")
 var cwd string
+var verbose = false
+
+func verbosef(format string, a ...interface{}) {
+	if !verbose {
+		return
+	}
+	fmt.Printf(format, a...)
+}
 
 func initBuild() (string, func(), error) {
 	if javaHome == "" {
@@ -108,12 +133,12 @@ func bindPackages(bindDir, javaDir string, pkgs []*types.Package) ([]string, err
 	return javaFiles, nil
 }
 
-func addExtraFiles(javaDir, scanDir string) error {
+func addExtraFiles(javaDir, scanDir string) ([]string, error) {
 	if scanDir == "" {
-		return nil
+		return nil, nil
 	}
-	var files []filePair
-	filepath.Walk(scanDir+"/", func(path string, info os.FileInfo, walkErr error) error {
+	extraFiles := make([]string, 0)
+	err := filepath.Walk(scanDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -125,11 +150,19 @@ func addExtraFiles(javaDir, scanDir string) error {
 			return err
 		}
 		if strings.HasSuffix(fileName, ".java") {
-			files = append(files, filePair{filepath.Join(javaDir, fileName), path})
+			p := filepath.Join(javaDir, fileName)
+			extraFiles = append(extraFiles, p)
+			return copyFile(p, path)
 		}
 		return nil
 	})
-	return copyFiles(files)
+	if err != nil {
+		return nil, err
+	}
+	if len(extraFiles) == 0 {
+		verbosef("warning: argument -s was passed on command line, but no .java files were found in '%s'\n", scanDir)
+	}
+	return extraFiles, nil
 }
 
 func createSupportFiles(bindDir, javaDir, mainFile string) error {
@@ -188,7 +221,7 @@ func createJar(target, jarDir string) error {
 		return err
 	}
 	w := zip.NewWriter(t)
-	fmt.Printf("Building %s\n", target)
+	verbosef("Building %s\n", target)
 	if err := filepath.Walk(jarDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -197,7 +230,7 @@ func createJar(target, jarDir string) error {
 			return nil
 		}
 		fileName, err := filepath.Rel(jarDir, path)
-		fmt.Printf("Adding %s\n", fileName)
+		verbosef("Adding %s\n", fileName)
 		if err != nil {
 			return err
 		}
@@ -253,9 +286,11 @@ func bindToJar(target string, scanDir string, pkgs ...string) error {
 	if err != nil {
 		return err
 	}
-	if err := addExtraFiles(javaDir, scanDir); err != nil {
+	extraFiles, err := addExtraFiles(javaDir, scanDir)
+	if err != nil {
 		return err
 	}
+	javaFiles = append(javaFiles, extraFiles...)
 	if err := createSupportFiles(bindDir, javaDir, mainFile); err != nil {
 		return err
 	}
@@ -336,14 +371,15 @@ const usage = `gojava is a tool for creating Java bindings to Go
 
 Usage:
 
-	gojava [-o <jar>] [-s <dir>] build [<pkg1>, [<pkg2>...]]
+	gojava [-v] [-o <jar>] [-s <dir>] build [<pkg1>, [<pkg2>...]]
 
 This generates a jar containing Java bindings to the specified Go packages.
 `
 
 func main() {
-	o := flag.String("o", "libgojava.jar", "Path to the generated jar file")
-	s := flag.String("s", "", "Additional path to scan for Java files")
+	o := flag.String("o", "libgojava.jar", "Path to the generated jar file.")
+	s := flag.String("s", "", "Additional path to scan for Java files.")
+	flag.BoolVar(&verbose, "v", false, "Verbose output.")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, usage)
 		flag.PrintDefaults()
