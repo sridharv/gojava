@@ -10,10 +10,10 @@ Usage
 	-o string
 	    Path to write the generated jar file. (default "libgojava.jar")
 	-s string
-	    Additional path to scan for Java files. These files will be compiled and
+	    Additional path to scan for Java source code. These files will be compiled and
 	    included in the final jar.
 	-v  Verbose output.
- */
+*/
 package main
 
 import (
@@ -133,19 +133,19 @@ func bindPackages(bindDir, javaDir string, pkgs []*types.Package) ([]string, err
 	return javaFiles, nil
 }
 
-func addExtraFiles(javaDir, scanDir string) ([]string, error) {
-	if scanDir == "" {
+func addExtraFiles(javaDir, sourceDir string) ([]string, error) {
+	if sourceDir == "" {
 		return nil, nil
 	}
 	extraFiles := make([]string, 0)
-	err := filepath.Walk(scanDir, func(path string, info os.FileInfo, walkErr error) error {
+	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if info.IsDir() {
 			return nil
 		}
-		fileName, err := filepath.Rel(scanDir, path)
+		fileName, err := filepath.Rel(sourceDir, path)
 		if err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func addExtraFiles(javaDir, scanDir string) ([]string, error) {
 		return nil, err
 	}
 	if len(extraFiles) == 0 {
-		verbosef("warning: argument -s was passed on command line, but no .java files were found in '%s'\n", scanDir)
+		verbosef("warning: argument -s was passed on command line, but no .java files were found in '%s'\n", sourceDir)
 	}
 	return extraFiles, nil
 }
@@ -259,7 +259,7 @@ func createJar(target, jarDir string) error {
 	return nil
 }
 
-func bindToJar(target string, scanDir string, pkgs ...string) error {
+func bindToJar(target string, sourceDir string, pkgs ...string) error {
 	tmpDir, cleanup, err := initBuild()
 	if err != nil {
 		return err
@@ -286,7 +286,7 @@ func bindToJar(target string, scanDir string, pkgs ...string) error {
 	if err != nil {
 		return err
 	}
-	extraFiles, err := addExtraFiles(javaDir, scanDir)
+	extraFiles, err := addExtraFiles(javaDir, sourceDir)
 	if err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ This generates a jar containing Java bindings to the specified Go packages.
 
 func main() {
 	o := flag.String("o", "libgojava.jar", "Path to the generated jar file.")
-	s := flag.String("s", "", "Additional path to scan for Java files.")
+	s := flag.String("s", "", "Additional path to scan for Java source code.")
 	flag.BoolVar(&verbose, "v", false, "Verbose output.")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, usage)

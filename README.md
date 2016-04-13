@@ -13,7 +13,7 @@ The same set of types are supported. Details on how the binding works can be fou
 	-o string
 	    Path to write the generated jar file. (default "libgojava.jar")
 	-s string
-	    Additional path to scan for Java files. These files will be compiled and
+	    Additional path to scan for Java source code. These files will be compiled and
 	    included in the final jar.
 	-v  Verbose output.
 ```
