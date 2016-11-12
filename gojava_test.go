@@ -9,12 +9,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/surullabs/lint"
 )
 
 var javaTest = flag.String("javatest", ".*", "Run only java tests matching the regular expression")
 
 func init() {
 	verbose = testing.Verbose()
+}
+
+func TestLint(t *testing.T) {
+	if err := lint.Default.Check("."); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestJavaBind(t *testing.T) {

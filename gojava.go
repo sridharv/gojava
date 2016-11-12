@@ -70,8 +70,12 @@ func initBuild() (string, func(), error) {
 		return "", nil, err
 	}
 	return tmpDir, func() {
-		os.RemoveAll(tmpDir)
-		os.Chdir(cwd)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			fmt.Fprintln(os.Stderr, "failed to remove temp dir:", tmpDir, err)
+		}
+		if err := os.Chdir(cwd); err != nil {
+			fmt.Fprintln(os.Stderr, "failed to change to dir:", cwd, err)
+		}
 	}, nil
 }
 
@@ -137,7 +141,7 @@ func addExtraFiles(javaDir, sourceDir string) ([]string, error) {
 	if sourceDir == "" {
 		return nil, nil
 	}
-	extraFiles := make([]string, 0)
+	var extraFiles []string
 	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -187,10 +191,8 @@ func createSupportFiles(bindDir, javaDir, mainFile string) error {
 	}
 	inc1, inc2 := filepath.Join(javaHome, "include"), filepath.Join(javaHome, "include", runtime.GOOS)
 	flagFile := filepath.Join(bindDir, "gojavacimport.go")
-	if err := ioutil.WriteFile(flagFile, []byte(fmt.Sprintf(javaInclude, inc1, inc2)), 0600); err != nil {
-		return err
-	}
-	return nil
+
+	return ioutil.WriteFile(flagFile, []byte(fmt.Sprintf(javaInclude, inc1, inc2)), 0600)
 }
 
 func buildGo(classDir, mainDir string) error {
@@ -278,7 +280,7 @@ func bindToJar(target string, sourceDir string, pkgs ...string) error {
 	jarDir := filepath.Join(tmpDir, "classes")
 	classDir := filepath.Join(tmpDir, "classes/go")
 
-	if err := createDirs(classDir, javaDir, mainDir); err != nil {
+	if err = createDirs(classDir, javaDir, mainDir); err != nil {
 		return err
 	}
 
