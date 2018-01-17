@@ -218,12 +218,30 @@ func createJar(target, jarDir string) error {
 	if err := os.Chdir(cwd); err != nil {
 		return err
 	}
-	t, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
+
+	dirName := filepath.Dir(target)
+	if _, err := os.Stat(dirName); err != nil && err == os.ErrNotExist {
+		if err = os.MkdirAll(dirName, 0644); err != nil {
+			return fmt.Errorf("failed to create: %v: %+v", dirName, err)
+		}
 	}
+
+	t, err := ioutil.TempFile(dirName, "."+filepath.Base(target)+".tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %+v", err)
+	}
+	tempFileName := t.Name()
+	var successful bool
+	defer func() {
+		if successful {
+			return
+		}
+		if err := os.Remove(tempFileName); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: failed to delete temporary file %s: %+v", tempFileName, err)
+		}
+	}()
 	w := zip.NewWriter(t)
-	verbosef("Building %s\n", target)
+	verbosef("Building %s\n", tempFileName)
 	if err := filepath.Walk(jarDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -257,6 +275,10 @@ func createJar(target, jarDir string) error {
 	if err := t.Close(); err != nil {
 		return err
 	}
+	if err := os.Rename(tempFileName, target); err != nil {
+		return fmt.Errorf("failed to atomically rename: %v", err)
+	}
+	successful = true
 	fmt.Printf("Finished building %s\n", target)
 	return nil
 }
